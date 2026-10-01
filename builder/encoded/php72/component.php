@@ -1,389 +1,291 @@
-<?php
-require_once('../config_install.php');
-
-if ($check_install != 0) {
-    exit;
-}
-
-if (!(isset($_POST["db_host"], $_POST["db_name"], $_POST["db_user"], $_POST["db_pass"], $_POST["username"], $_POST["password"], $_POST["email"], $_POST["repeat"], $_POST["domain"], $_POST["title"], $_POST["language"]))) {
-    echo boomCode(0, ["error" => "An error occurred. Please try again or contact us."]);
-    exit;
-}
-
-if (empty($_POST["db_host"]) || empty($_POST["db_name"]) || empty($_POST["db_user"]) || empty($_POST["username"]) || empty($_POST["password"]) || empty($_POST["email"]) || empty($_POST["repeat"]) || empty($_POST["domain"]) || empty($_POST["title"]) || empty($_POST["language"])) {
-    echo boomCode(0, ["error" => "Please fill in all information."]);
-    exit;
-}
-
-$DB_HOST = $_POST["db_host"];
-$DB_NAME = $_POST["db_name"];
-$DB_USER = $_POST["db_user"];
-$DB_PASS = $_POST["db_pass"];
-$HT_DOM  = $_POST["domain"];
-
-$mysqli = @new mysqli($DB_HOST, $DB_USER, $DB_PASS, $DB_NAME);
-if (mysqli_connect_errno()) {
-    echo boomCode(0, ["error" => "Unable to connect to database please check your database information."]);
-    exit;
-}
-
-echo processInstall();
-exit;
-
-function processInstall()
-{
-    global $mysqli, $HT_LIC, $result, $term_content, $privacy_content, $help_content;
-    require "../../system/template/data_template.php";
-    
-    $username = escape($_POST["username"]);
-    $email = escape($_POST["email"]);
-    $password = escape($_POST["password"]);
-    $repeat = escape($_POST["repeat"]);
-    $domain = escape($_POST["domain"]);
-    $title = escape($_POST["title"]);
-    $language = escape($_POST["language"]);
-    
-    $parsedUrl = parse_url($domain);
-    $host = isset($parsedUrl['host']) ? $parsedUrl['host'] : '';
-    $path = isset($parsedUrl['path']) ? $parsedUrl['path'] : '';
-    $prefixBase = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '_', $host . $path));
-    $prefix = trim($prefixBase, '_') . '_';
-    $__SECURE_HUNTER = ["lic" => $HT_LIC];
-
-    if ($password != $repeat) {
-        return boomCode(0, ["error" => "Password are not matching please verify and try again"]);
-    }
-    
-    // التوافق مع PHP 7.0/7.1/7.2 بدلاً من الاعتماد الكلي على mbstring
-    $user_len = function_exists('mb_strlen') ? mb_strlen($username) : strlen($username);
-    if ($user_len < 2 || $user_len > 18) {
-        return boomCode(0, ["error" => "Invalid username, username must be between 2 and 18 characters long."]);
-    }
-    
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        return boomCode(0, ["error" => "Invalid email please provide a valid email."]);
-    }
-    if (substr($domain, -1) == "/" || $domain == "" || !preg_match("@https?[\\w_-]*@i", $domain)) {
-        return boomCode(0, ["error" => "Invalid domain please make sure domain do not end with a / and try again."]);
-    }
-    if (!file_exists(BOOM_PATH . "/system/language/" . $language . "/language.php")) {
-        $language = "English";
-    }
-    
-    $time = time();
-    $encrypt = str_shuffle("HUNTER---" . md5(rand(1000000, 9999999)));
-    $password = boomEncrypt($password, $encrypt);
-    
-    $check = isset($result) ? json_decode($result) : null;
-    $dbcode = isset($check->config) ? $check->config : '';
-
-    $mysqli->query("CREATE TABLE `boom_act` (`act_user` INT NOT NULL DEFAULT '0', `act_name` varchar(100) NOT NULL DEFAULT '', `act_time` INT NOT NULL DEFAULT '0', KEY `act_name` (`act_name`), KEY `act_user` (`act_user`), KEY `act_time` (`act_time`)) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_addons` (`addons_id` INT NOT NULL AUTO_INCREMENT, `addons` varchar(100) NOT NULL DEFAULT '', `addons_load` INT NOT NULL DEFAULT '0', `addons_key` varchar(100) NOT NULL DEFAULT '', `addons_access` INT NOT NULL DEFAULT '0', `bot_name` varchar(100) NOT NULL DEFAULT '', `bot_id` INT NOT NULL DEFAULT '0', `custom1` varchar(1000) NOT NULL DEFAULT '', `custom2` varchar(1000) NOT NULL DEFAULT '', `custom3` varchar(1000) NOT NULL DEFAULT '', `custom4` varchar(1000) NOT NULL DEFAULT '', `custom5` varchar(1000) NOT NULL DEFAULT '', `custom6` varchar(1000) NOT NULL DEFAULT '', `custom7` varchar(1000) NOT NULL DEFAULT '', `custom8` varchar(1000) NOT NULL DEFAULT '', `custom9` varchar(1000) NOT NULL DEFAULT '', `custom10` varchar(4000) NOT NULL DEFAULT '', PRIMARY KEY (`addons_id`)) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_banned` (`id` INT NOT NULL AUTO_INCREMENT, `ip` varchar(100) NOT NULL DEFAULT '', `ban_user` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `ip` (`ip`), KEY `ban_user` (`ban_user`)) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_call` (`call_id` INT NOT NULL AUTO_INCREMENT, `call_hunter` INT NOT NULL DEFAULT '0', `call_target` INT NOT NULL DEFAULT '0', `call_type` INT NOT NULL DEFAULT '0', `call_status` INT NOT NULL DEFAULT '0', `call_reason` INT NOT NULL DEFAULT '0', `call_method` INT NOT NULL DEFAULT '1', `call_paid` INT NOT NULL DEFAULT '0', `call_time` INT NOT NULL DEFAULT '0', `call_last` INT NOT NULL DEFAULT '0', `call_active` INT NOT NULL DEFAULT '0', `call_room` varchar(100) NOT NULL DEFAULT '', PRIMARY KEY (`call_id`), KEY `call_hunter` (`call_hunter`), KEY `call_target` (`call_target`), KEY `call_status` (`call_status`), KEY `call_time` (`call_time`), KEY `call_active` (`call_active`)) ENGINE=InnoDB AUTO_INCREMENT=48 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_call_action` (`id` INT NOT NULL AUTO_INCREMENT, `call_room` INT NOT NULL DEFAULT '0', `hunter` INT NOT NULL DEFAULT '0', `target` INT NOT NULL DEFAULT '0', `action_time` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `target` (`target`), KEY `action_time` (`action_time`)) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_call_user` (`id` INT NOT NULL AUTO_INCREMENT, `croom` INT NOT NULL DEFAULT '0', `cuser` INT NOT NULL DEFAULT '0', `cdate` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `croom` (`croom`), KEY `cuser` (`cuser`), KEY `cdate` (`cdate`)) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_chat` (`post_id` INT NOT NULL AUTO_INCREMENT, `user_id` INT NOT NULL DEFAULT '0', `post_date` INT NOT NULL DEFAULT '0', `post_message` varchar(3000) NOT NULL DEFAULT '', `post_roomid` INT NOT NULL DEFAULT '1', `type` varchar(50) NOT NULL DEFAULT '', `log_rank` INT NOT NULL DEFAULT '999', `file` INT NOT NULL DEFAULT '0', `quser` INT NOT NULL DEFAULT '0', `qpost` INT NOT NULL DEFAULT '0', `pghost` INT NOT NULL DEFAULT '0', `syslog` INT NOT NULL DEFAULT '0', `log_uid` INT NOT NULL DEFAULT '0', `tid` INT NOT NULL DEFAULT '0', `tname` varchar(60) NOT NULL DEFAULT '', `custom` varchar(2000) NOT NULL DEFAULT '', PRIMARY KEY (`post_id`), KEY `post_roomid` (`post_roomid`), KEY `user_id` (`user_id`), KEY `post_date` (`post_date`), KEY `quser` (`quser`), KEY `qpost` (`qpost`), KEY `pghost` (`pghost`)) ENGINE=InnoDB AUTO_INCREMENT=9873 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_clean` (`id` INT NOT NULL AUTO_INCREMENT, `last_clean` INT NOT NULL DEFAULT '0', `last_expw` INT NOT NULL DEFAULT '0', `last_expm` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`)) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_console` (`id` INT NOT NULL AUTO_INCREMENT, `hunter` INT NOT NULL DEFAULT '0', `target` INT NOT NULL DEFAULT '0', `room` INT NOT NULL DEFAULT '0', `ctype` varchar(200) NOT NULL DEFAULT '', `crank` INT NOT NULL DEFAULT '0', `delay` INT NOT NULL DEFAULT '0', `reason` varchar(2000) NOT NULL DEFAULT '', `ctext` varchar(400) NOT NULL DEFAULT '', `custom` varchar(2000) NOT NULL DEFAULT '', `custom2` varchar(2000) NOT NULL DEFAULT '', `cdate` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `hunter` (`hunter`), KEY `target` (`target`), KEY `room` (`room`)) ENGINE=InnoDB AUTO_INCREMENT=340 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_contact` (`id` INT NOT NULL AUTO_INCREMENT, `cname` varchar(100) NOT NULL DEFAULT '0', `cmessage` varchar(4000) NOT NULL DEFAULT '', `cemail` varchar(100) NOT NULL DEFAULT '', `cip` varchar(100) NOT NULL DEFAULT '', `cdate` INT NOT NULL DEFAULT '0', `cview` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `cip` (`cip`), KEY `cview` (`cview`)) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_conversation` (`cid` varchar(30) NOT NULL DEFAULT '', `hunter` INT NOT NULL DEFAULT '0', `target` INT NOT NULL DEFAULT '0', `unread` INT NOT NULL DEFAULT '0', `cdate` INT NOT NULL DEFAULT '1', PRIMARY KEY (`cid`), KEY `hunter` (`hunter`), KEY `target` (`target`), KEY `cdate` (`cdate`)) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_data` (`id` INT NOT NULL AUTO_INCREMENT, `data_user` INT NOT NULL DEFAULT '0', `data_key` varchar(100) NOT NULL DEFAULT '', `data_value` longtext NOT NULL, PRIMARY KEY (`id`), KEY `data_user` (`data_user`), KEY `data_key` (`data_key`)) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_exp` (`uid` INT NOT NULL AUTO_INCREMENT, `exp_current` INT NOT NULL DEFAULT '0', `exp_week` INT NOT NULL DEFAULT '0', `exp_month` INT NOT NULL DEFAULT '0', `exp_total` INT NOT NULL DEFAULT '0', PRIMARY KEY (`uid`)) ENGINE=InnoDB AUTO_INCREMENT=147 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_filter` (`id` INT NOT NULL AUTO_INCREMENT, `word` varchar(100) NOT NULL DEFAULT '', `word_type` varchar(12) NOT NULL DEFAULT 'word', PRIMARY KEY (`id`), KEY `word_type` (`word_type`)) ENGINE=InnoDB AUTO_INCREMENT=162 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_friends` (`id` INT NOT NULL AUTO_INCREMENT, `hunter` INT NOT NULL DEFAULT '0', `target` INT NOT NULL DEFAULT '0', `fstatus` INT NOT NULL DEFAULT '1', `viewed` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `hunter` (`hunter`), KEY `target` (`target`)) ENGINE=InnoDB AUTO_INCREMENT=457 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_gift` (`id` INT NOT NULL AUTO_INCREMENT, `gift_image` varchar(100) NOT NULL DEFAULT '', `gift_title` varchar(300) NOT NULL DEFAULT 'Gift', `gift_method` INT NOT NULL DEFAULT '1', `gift_cost` INT NOT NULL DEFAULT '0', `gift_rank` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `gift_rank` (`gift_rank`)) ENGINE=InnoDB AUTO_INCREMENT=36 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_group_call` (`call_id` INT NOT NULL AUTO_INCREMENT, `call_name` varchar(100) NOT NULL DEFAULT '', `call_creator` INT NOT NULL DEFAULT '0', `call_type` INT NOT NULL DEFAULT '1', `call_active` INT NOT NULL DEFAULT '0', `call_time` INT NOT NULL DEFAULT '0', `call_paid` INT NOT NULL DEFAULT '0', `call_method` INT NOT NULL DEFAULT '0', `call_room` varchar(100) NOT NULL DEFAULT '', `call_password` varchar(40) NOT NULL DEFAULT '', `call_date` INT NOT NULL DEFAULT '0', `call_access` INT NOT NULL DEFAULT '0', PRIMARY KEY (`call_id`), KEY `call_date` (`call_date`)) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_history` (`id` INT NOT NULL AUTO_INCREMENT, `hunter` INT NOT NULL DEFAULT '0', `target` INT NOT NULL DEFAULT '0', `htype` varchar(30) NOT NULL DEFAULT '', `reason` varchar(2000) NOT NULL DEFAULT '', `delay` INT NOT NULL DEFAULT '0', `history_date` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `hunter` (`hunter`), KEY `target` (`target`), KEY `htype` (`htype`)) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_ignore` (`ignore_id` INT NOT NULL AUTO_INCREMENT, `ignorer` INT NOT NULL DEFAULT '0', `ignored` INT NOT NULL DEFAULT '0', `ignore_date` INT NOT NULL DEFAULT '0', PRIMARY KEY (`ignore_id`), KEY `ignorer` (`ignorer`), KEY `ignored` (`ignored`), KEY `ignore_date` (`ignore_date`)) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_login` (`id` INT NOT NULL AUTO_INCREMENT, `logip` varchar(50) NOT NULL DEFAULT '', `logdate` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `logip` (`logip`), KEY `logdate` (`logdate`)) ENGINE=InnoDB AUTO_INCREMENT=237 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_mail` (`id` INT NOT NULL AUTO_INCREMENT, `mail_user` INT NOT NULL DEFAULT '0', `mail_date` INT NOT NULL DEFAULT '0', `mail_type` varchar(50) NOT NULL DEFAULT '', PRIMARY KEY (`id`), KEY `mail_user` (`mail_user`), KEY `mail_date` (`mail_date`), KEY `mail_type` (`mail_type`)) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_name` (`id` INT NOT NULL AUTO_INCREMENT, `uid` INT NOT NULL DEFAULT '0', `uname` varchar(100) NOT NULL DEFAULT '', `udate` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `uid` (`uid`)) ENGINE=InnoDB AUTO_INCREMENT=33 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_news` (`id` INT NOT NULL AUTO_INCREMENT, `news_comment` INT NOT NULL DEFAULT '1', `news_like` INT NOT NULL DEFAULT '1', `news_poster` INT NOT NULL DEFAULT '0', `news_message` varchar(3000) NOT NULL DEFAULT '', `news_file` varchar(1000) NOT NULL DEFAULT '', `news_file_type` varchar(20) NOT NULL DEFAULT '', `news_date` INT NOT NULL DEFAULT '1', PRIMARY KEY (`id`), KEY `news_date` (`news_date`)) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_news_like` (`id` INT NOT NULL AUTO_INCREMENT, `uid` INT NOT NULL DEFAULT '0', `liked_uid` INT NOT NULL DEFAULT '0', `like_type` INT NOT NULL DEFAULT '1', `like_post` INT NOT NULL DEFAULT '1', `like_date` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `uid` (`uid`), KEY `liked_uid` (`liked_uid`), KEY `like_date` (`like_date`)) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_news_reply` (`reply_id` INT NOT NULL AUTO_INCREMENT, `parent_id` INT NOT NULL DEFAULT '0', `reply_user` INT NOT NULL DEFAULT '0', `reply_date` INT NOT NULL DEFAULT '0', `reply_content` varchar(1000) NOT NULL DEFAULT '', `reply_uid` INT NOT NULL DEFAULT '0', PRIMARY KEY (`reply_id`), KEY `parent_id` (`parent_id`), KEY `reply_user` (`reply_user`), KEY `reply_date` (`reply_date`), KEY `reply_uid` (`reply_uid`)) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_notification` (`id` INT NOT NULL AUTO_INCREMENT, `notifier` INT NOT NULL DEFAULT '0', `notified` INT NOT NULL DEFAULT '0', `notify_type` varchar(30) NOT NULL DEFAULT '', `notify_date` INT NOT NULL DEFAULT '0', `notify_source` varchar(30) NOT NULL DEFAULT '', `notify_id` INT NOT NULL DEFAULT '0', `notify_rank` INT NOT NULL DEFAULT '0', `notify_delay` INT NOT NULL DEFAULT '0', `notify_reason` varchar(2000) NOT NULL DEFAULT '', `notify_view` INT NOT NULL DEFAULT '0', `notify_custom` varchar(2000) NOT NULL DEFAULT '', `notify_custom2` varchar(2000) NOT NULL DEFAULT '', `notify_icon` varchar(30) NOT NULL DEFAULT '', `notify_class` varchar(50) NOT NULL DEFAULT '', `notify_data` varchar(300) NOT NULL DEFAULT '', PRIMARY KEY (`id`), KEY `notifier` (`notifier`), KEY `notified` (`notified`), KEY `notify_date` (`notify_date`), KEY `notify_source` (`notify_source`), KEY `notify_id` (`notify_id`), KEY `notify_view` (`notify_view`)) ENGINE=InnoDB AUTO_INCREMENT=1216 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_page` (`page_id` INT NOT NULL AUTO_INCREMENT, `page_name` varchar(100) NOT NULL DEFAULT '', `page_content` text NOT NULL, PRIMARY KEY (`page_id`)) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_post` (`post_id` INT NOT NULL AUTO_INCREMENT, `post_comment` INT NOT NULL DEFAULT '1', `post_like` INT NOT NULL DEFAULT '1', `post_user` INT NOT NULL DEFAULT '0', `post_date` INT NOT NULL DEFAULT '0', `post_content` varchar(2000) NOT NULL DEFAULT '', `post_file` varchar(1000) NOT NULL DEFAULT '', `post_file_type` varchar(20) NOT NULL DEFAULT '', `post_actual` INT NOT NULL DEFAULT '0', PRIMARY KEY (`post_id`), KEY `post_user` (`post_user`), KEY `post_date` (`post_date`)) ENGINE=InnoDB AUTO_INCREMENT=36 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_post_like` (`id` INT NOT NULL AUTO_INCREMENT, `uid` INT NOT NULL DEFAULT '0', `liked_uid` INT NOT NULL DEFAULT '0', `like_type` INT NOT NULL DEFAULT '1', `like_post` INT NOT NULL DEFAULT '1', `like_date` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `uid` (`uid`), KEY `liked_uid` (`liked_uid`), KEY `like_date` (`like_date`)) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_post_reply` (`reply_id` INT NOT NULL AUTO_INCREMENT, `parent_id` INT NOT NULL DEFAULT '0', `reply_user` INT NOT NULL DEFAULT '0', `reply_date` INT NOT NULL DEFAULT '0', `reply_content` varchar(1000) NOT NULL DEFAULT '', `reply_uid` INT NOT NULL DEFAULT '0', PRIMARY KEY (`reply_id`), KEY `parent_id` (`parent_id`), KEY `reply_user` (`reply_user`), KEY `reply_date` (`reply_date`), KEY `reply_uid` (`reply_uid`)) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_private` (`id` INT NOT NULL AUTO_INCREMENT, `time` INT NOT NULL DEFAULT '0', `message` varchar(2000) NOT NULL DEFAULT '', `hunter` INT NOT NULL DEFAULT '0', `target` INT NOT NULL DEFAULT '0', `status` INT NOT NULL DEFAULT '0', `view` INT NOT NULL DEFAULT '0', `file` INT NOT NULL DEFAULT '0', `qpost` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `hunter` (`hunter`), KEY `target` (`target`), KEY `time` (`time`), KEY `status` (`status`), KEY `qpost` (`qpost`)) ENGINE=InnoDB AUTO_INCREMENT=8452 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_pro_like` (`id` INT NOT NULL AUTO_INCREMENT, `hunter` INT NOT NULL DEFAULT '0', `target` INT NOT NULL DEFAULT '0', `like_date` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `hunter` (`hunter`), KEY `target` (`target`), KEY `like_date` (`like_date`)) ENGINE=InnoDB AUTO_INCREMENT=657 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_radio_stream` (`id` INT NOT NULL AUTO_INCREMENT, `stream_url` varchar(300) NOT NULL DEFAULT '', `stream_alias` varchar(50) NOT NULL DEFAULT '', PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_report` (`report_id` INT NOT NULL AUTO_INCREMENT, `report_type` INT NOT NULL DEFAULT '0', `report_user` INT NOT NULL DEFAULT '0', `report_target` INT NOT NULL DEFAULT '0', `report_post` INT NOT NULL DEFAULT '0', `report_reason` varchar(500) NOT NULL DEFAULT '', `report_room` INT NOT NULL DEFAULT '0', `report_date` INT NOT NULL DEFAULT '0', PRIMARY KEY (`report_id`), KEY `report_user` (`report_user`), KEY `report_target` (`report_target`)) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_room_action` (`id` INT NOT NULL AUTO_INCREMENT, `action_room` INT NOT NULL DEFAULT '0', `action_user` INT NOT NULL DEFAULT '0', `action_muted` INT NOT NULL DEFAULT '0', `action_blocked` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `action_user` (`action_user`)) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_room_staff` (`id` INT NOT NULL AUTO_INCREMENT, `room_id` INT NOT NULL DEFAULT '0', `room_staff` INT NOT NULL DEFAULT '0', `room_rank` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `room_id` (`room_id`), KEY `room_staff` (`room_staff`)) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_rooms` (`room_id` INT NOT NULL AUTO_INCREMENT, `room_name` varchar(40) NOT NULL DEFAULT '', `topic` varchar(1000) NOT NULL DEFAULT '', `access` INT NOT NULL DEFAULT '0', `description` varchar(400) NOT NULL DEFAULT '', `room_icon` varchar(100) NOT NULL DEFAULT 'default_room.png', `max_user` INT NOT NULL DEFAULT '0', `password` varchar(40) NOT NULL DEFAULT '', `room_system` INT NOT NULL DEFAULT '1', `room_action` INT NOT NULL DEFAULT '0', `room_player_id` INT NOT NULL DEFAULT '0', `room_creator` INT NOT NULL DEFAULT '0', `rcaction` INT NOT NULL DEFAULT '0', `rldelete` varchar(300) NOT NULL DEFAULT '', `rltime` INT NOT NULL DEFAULT '0', `pinned` INT NOT NULL DEFAULT '0', PRIMARY KEY (`room_id`), KEY `room_system` (`room_system`), KEY `room_action` (`room_action`)) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_setting` (`id` INT NOT NULL AUTO_INCREMENT, `title` varchar(200) NOT NULL DEFAULT 'Codychat', `site_description` varchar(600) NOT NULL DEFAULT '', `site_keyword` varchar(600) NOT NULL DEFAULT '', `login_page` varchar(50) NOT NULL DEFAULT 'Default', `dat` varchar(100) NOT NULL DEFAULT '', `system_id` INT NOT NULL DEFAULT '0', `registration` INT NOT NULL DEFAULT '1', `reg_act` INT NOT NULL DEFAULT '0', `reg_delay` INT NOT NULL DEFAULT '5', `maint_mode` INT NOT NULL DEFAULT '0', `use_bridge` INT NOT NULL DEFAULT '0', `use_lobby` INT NOT NULL DEFAULT '0', `use_logs` INT NOT NULL DEFAULT '12345', `allow_guest` INT NOT NULL DEFAULT '0', `guest_form` INT NOT NULL DEFAULT '0', `default_theme` varchar(30) NOT NULL DEFAULT 'Lite', `allow_theme` INT NOT NULL DEFAULT '100', `max_avatar` INT NOT NULL DEFAULT '1', `max_cover` INT NOT NULL DEFAULT '1', `max_ricon` INT NOT NULL DEFAULT '1', `file_weight` INT NOT NULL DEFAULT '2', `domain` varchar(100) NOT NULL DEFAULT '', `allow_avatar` INT NOT NULL DEFAULT '1', `allow_cover` INT NOT NULL DEFAULT '100', `allow_gcover` INT NOT NULL DEFAULT '100', `allow_name_color` INT NOT NULL DEFAULT '100', `allow_name_grad` INT NOT NULL DEFAULT '100', `allow_name_neon` INT NOT NULL DEFAULT '100', `allow_name_font` INT NOT NULL DEFAULT '100', `allow_pstyle` INT NOT NULL DEFAULT '100', `allow_history` INT NOT NULL DEFAULT '100', `allow_main` INT NOT NULL DEFAULT '0', `allow_private` INT NOT NULL DEFAULT '0', `allow_cupload` INT NOT NULL DEFAULT '100', `allow_pupload` INT NOT NULL DEFAULT '100', `allow_wupload` INT NOT NULL DEFAULT '100', `allow_direct` INT NOT NULL DEFAULT '0', `allow_room` INT NOT NULL DEFAULT '100', `allow_vroom` INT NOT NULL DEFAULT '100', `allow_quote` INT NOT NULL DEFAULT '100', `allow_pquote` INT NOT NULL DEFAULT '100', `allow_video` INT NOT NULL DEFAULT '100', `allow_audio` INT NOT NULL DEFAULT '100', `allow_zip` INT NOT NULL DEFAULT '100', `use_like` INT NOT NULL DEFAULT '0', `use_flag` INT NOT NULL DEFAULT '0', `use_gender` INT NOT NULL DEFAULT '0', `use_geo` INT NOT NULL DEFAULT '1', `version` varchar(5) NOT NULL DEFAULT '10', `bbfv` varchar(5) NOT NULL DEFAULT '1.0', `language` varchar(20) NOT NULL DEFAULT 'English', `activation` INT NOT NULL DEFAULT '0', `use_wall` INT NOT NULL DEFAULT '1', `timezone` varchar(60) NOT NULL DEFAULT 'America/Toronto', `boom` varchar(50) NOT NULL DEFAULT '', `min_age` INT NOT NULL DEFAULT '14', `allow_colors` INT NOT NULL DEFAULT '100', `allow_grad` INT NOT NULL DEFAULT '100', `allow_neon` INT NOT NULL DEFAULT '100', `allow_font` INT NOT NULL DEFAULT '100', `allow_mood` INT NOT NULL DEFAULT '100', `allow_scontent` INT NOT NULL DEFAULT '100', `allow_rnews` INT NOT NULL DEFAULT '100', `allow_about` INT NOT NULL DEFAULT '100', `allow_report` INT NOT NULL DEFAULT '100', `emo_plus` INT NOT NULL DEFAULT '100', `speed` INT NOT NULL DEFAULT '3000', `player_id` INT NOT NULL DEFAULT '0', `max_main` INT NOT NULL DEFAULT '300', `max_private` INT NOT NULL DEFAULT '200', `word_action` INT NOT NULL DEFAULT '0', `word_delay` INT NOT NULL DEFAULT '5', `spam_action` INT NOT NULL DEFAULT '0', `spam_delay` INT NOT NULL DEFAULT '60', `flood_action` INT NOT NULL DEFAULT '1', `flood_delay` INT NOT NULL DEFAULT '5', `vpn_delay` INT NOT NULL DEFAULT '5', `email_filter` INT NOT NULL DEFAULT '0', `max_username` INT NOT NULL DEFAULT '18', `chat_delete` INT NOT NULL DEFAULT '0', `private_delete` INT NOT NULL DEFAULT '0', `wall_delete` INT NOT NULL DEFAULT '0', `member_delete` INT NOT NULL DEFAULT '0', `room_delete` INT NOT NULL DEFAULT '0', `ignore_delete` INT NOT NULL DEFAULT '0', `max_offcount` INT NOT NULL DEFAULT '0', `site_email` varchar(200) NOT NULL DEFAULT 'yoursiteemail@email.com', `email_from` varchar(100) NOT NULL DEFAULT 'Codychat', `mail_type` varchar(10) NOT NULL DEFAULT 'mail', `smtp_host` varchar(100) NOT NULL DEFAULT '', `smtp_username` varchar(100) NOT NULL DEFAULT '', `smtp_password` varchar(100) NOT NULL DEFAULT '', `smtp_port` varchar(10) NOT NULL DEFAULT '465', `smtp_type` varchar(10) NOT NULL DEFAULT 'tls', `allow_name` INT NOT NULL DEFAULT '100', `act_delay` INT NOT NULL DEFAULT '0', `cookie_law` INT NOT NULL DEFAULT '0', `use_recapt` INT NOT NULL DEFAULT '0', `recapt_key` varchar(100) NOT NULL DEFAULT '', `recapt_secret` varchar(100) NOT NULL DEFAULT '', `can_raction` INT NOT NULL DEFAULT '100', `can_mute` INT NOT NULL DEFAULT '100', `can_warn` INT NOT NULL DEFAULT '100', `can_kick` INT NOT NULL DEFAULT '100', `can_ghost` INT NOT NULL DEFAULT '100', `can_ban` INT NOT NULL DEFAULT '100', `can_delete` INT NOT NULL DEFAULT '100', `can_modavat` INT NOT NULL DEFAULT '100', `can_modcover` INT NOT NULL DEFAULT '100', `can_modmood` INT NOT NULL DEFAULT '100', `can_modabout` INT NOT NULL DEFAULT '100', `can_modcolor` INT NOT NULL DEFAULT '100', `can_modname` INT NOT NULL DEFAULT '100', `can_modemail` INT NOT NULL DEFAULT '100', `can_modpass` INT NOT NULL DEFAULT '100', `can_modblock` INT NOT NULL DEFAULT '100', `can_modvpn` INT NOT NULL DEFAULT '100', `can_verify` INT NOT NULL DEFAULT '100', `can_vip` INT NOT NULL DEFAULT '100', `can_vemail` INT NOT NULL DEFAULT '100', `can_vghost` INT NOT NULL DEFAULT '999', `can_vother` INT NOT NULL DEFAULT '100', `can_vname` INT NOT NULL DEFAULT '100', `can_vhistory` INT NOT NULL DEFAULT '100', `can_note` INT NOT NULL DEFAULT '100', `can_news` INT NOT NULL DEFAULT '100', `can_rank` INT NOT NULL DEFAULT '100', `can_auth` INT NOT NULL DEFAULT '100', `can_inv` INT NOT NULL DEFAULT '100', `can_clear` INT NOT NULL DEFAULT '100', `can_bpriv` INT NOT NULL DEFAULT '100', `can_rpass` INT NOT NULL DEFAULT '100', `can_topic` INT NOT NULL DEFAULT '100', `can_content` INT NOT NULL DEFAULT '100', `can_maddons` INT NOT NULL DEFAULT '100', `can_mroom` INT NOT NULL DEFAULT '100', `can_mfilter` INT NOT NULL DEFAULT '100', `can_dj` INT NOT NULL DEFAULT '100', `can_cuser` INT NOT NULL DEFAULT '100', `can_mip` INT NOT NULL DEFAULT '100', `can_mlogs` INT NOT NULL DEFAULT '100', `can_mplay` INT NOT NULL DEFAULT '100', `can_mcontact` INT NOT NULL DEFAULT '100', `use_vpn` INT NOT NULL DEFAULT '0', `vpn_key` varchar(80) NOT NULL DEFAULT '', `coppa` INT NOT NULL DEFAULT '0', `redis_status` INT NOT NULL DEFAULT '0', `max_flood` INT NOT NULL DEFAULT '6', `max_emo` INT NOT NULL DEFAULT '10', `max_room` INT NOT NULL DEFAULT '1', `max_reg` INT NOT NULL DEFAULT '5', `max_greg` INT NOT NULL DEFAULT '25', `curset` INT NOT NULL DEFAULT '0', `can_rclear` INT NOT NULL DEFAULT '6', `can_rlogs` INT NOT NULL DEFAULT '6', `use_level` INT NOT NULL DEFAULT '0', `level_mode` INT NOT NULL DEFAULT '10', `exp_chat` INT NOT NULL DEFAULT '1', `exp_priv` INT NOT NULL DEFAULT '1', `exp_gift` INT NOT NULL DEFAULT '1', `exp_post` INT NOT NULL DEFAULT '1', `use_rate` INT NOT NULL DEFAULT '0', `rate_limit` INT NOT NULL DEFAULT '50', `word_proof` INT NOT NULL DEFAULT '100', `use_badge` INT NOT NULL DEFAULT '0', `bachat` INT NOT NULL DEFAULT '10', `bagift` INT NOT NULL DEFAULT '10', `balike` INT NOT NULL DEFAULT '10', `bafriend` INT NOT NULL DEFAULT '10', `baruby` INT NOT NULL DEFAULT '100', `bagold` INT NOT NULL DEFAULT '5000', `babeat` INT NOT NULL DEFAULT '1000', `use_gift` INT NOT NULL DEFAULT '0', `use_wallet` INT NOT NULL DEFAULT '0', `can_vwallet` INT NOT NULL DEFAULT '100', `can_swallet` INT NOT NULL DEFAULT '100', `can_ruby` INT NOT NULL DEFAULT '100', `ruby_delay` INT NOT NULL DEFAULT '60', `ruby_base` INT NOT NULL DEFAULT '0', `can_gold` INT NOT NULL DEFAULT '100', `gold_delay` INT NOT NULL DEFAULT '2', `gold_base` INT NOT NULL DEFAULT '0', `use_call` INT NOT NULL DEFAULT '0', `can_acall` INT NOT NULL DEFAULT '100', `can_vcall` INT NOT NULL DEFAULT '100', `call_appid` varchar(50) NOT NULL DEFAULT '', `call_secret` varchar(50) NOT NULL DEFAULT '', `call_max` INT NOT NULL DEFAULT '60', `call_method` INT NOT NULL DEFAULT '1', `call_cost` INT NOT NULL DEFAULT '0', `live_url` varchar(60) NOT NULL DEFAULT '', `live_appid` varchar(50) NOT NULL DEFAULT '', `live_secret` varchar(100) NOT NULL DEFAULT '', `use_app` INT NOT NULL DEFAULT '0', `app_name` varchar(30) NOT NULL DEFAULT 'Chat', `app_color` varchar(10) NOT NULL DEFAULT '#000000', `openai_key` varchar(200) NOT NULL DEFAULT '', `mod_cat` varchar(200) NOT NULL DEFAULT '', `img_mod` INT NOT NULL DEFAULT '0', `can_gcall` INT NOT NULL DEFAULT '100', `can_mgcall` INT NOT NULL DEFAULT '100', `max_gcall` INT NOT NULL DEFAULT '180', `can_agcall` INT NOT NULL DEFAULT '100', `can_cgcall` INT NOT NULL DEFAULT '100', `can_vgcall` INT NOT NULL DEFAULT '100',`log_mode` INT NOT NULL DEFAULT '1',`can_pmusic` INT NOT NULL DEFAULT '1',`allow_pmusic` INT NOT NULL DEFAULT '100', `left_mode` INT NOT NULL DEFAULT '1', PRIMARY KEY (`id`)) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_temp` (`id` INT NOT NULL AUTO_INCREMENT, `temp_user` INT NOT NULL DEFAULT '0', `temp_key` varchar(200) NOT NULL DEFAULT '', `temp_date` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `temp_user` (`temp_user`), KEY `temp_key` (`temp_key`), KEY `temp_date` (`temp_date`)) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_upload` (`id` INT NOT NULL AUTO_INCREMENT, `file_name` varchar(300) NOT NULL DEFAULT '', `file_key` varchar(100) NOT NULL DEFAULT '', `date_sent` INT NOT NULL DEFAULT '0', `file_user` INT NOT NULL DEFAULT '0', `file_zone` varchar(30) NOT NULL DEFAULT '1', `file_type` varchar(30) NOT NULL DEFAULT '', `file_complete` INT NOT NULL DEFAULT '1', `relative_post` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `date_sent` (`date_sent`), KEY `file_zone` (`file_zone`), KEY `file_complete` (`file_complete`)) ENGINE=InnoDB AUTO_INCREMENT=694 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_users` (`user_id` INT NOT NULL AUTO_INCREMENT, `user_name` varchar(60) NOT NULL DEFAULT '', `user_password` varchar(60) NOT NULL DEFAULT '', `user_email` varchar(80) NOT NULL DEFAULT '', `user_smail` varchar(80) NOT NULL DEFAULT '', `sub_id` varchar(50) NOT NULL DEFAULT '', `user_ip` varchar(50) NOT NULL DEFAULT '', `user_auth` INT NOT NULL DEFAULT '0', `user_join` INT NOT NULL DEFAULT '0', `user_move` INT NOT NULL DEFAULT '0', `last_action` INT NOT NULL DEFAULT '0', `user_beat` INT NOT NULL DEFAULT '0', `user_language` varchar(30) NOT NULL DEFAULT 'English', `user_timezone` varchar(60) NOT NULL DEFAULT 'America/Toronto', `user_status` INT NOT NULL DEFAULT '1', `user_color` varchar(20) NOT NULL DEFAULT 'user', `user_pstyle` varchar(100) NOT NULL DEFAULT '', `user_font` varchar(10) NOT NULL DEFAULT '', `bccolor` varchar(10) NOT NULL DEFAULT '', `bcbold` varchar(10) NOT NULL DEFAULT '', `bcfont` varchar(10) NOT NULL DEFAULT '', `user_rank` INT NOT NULL DEFAULT '1', `user_level` INT NOT NULL DEFAULT '1', `vip_end` INT NOT NULL DEFAULT '0', `user_dj` INT NOT NULL DEFAULT '0', `user_onair` INT NOT NULL DEFAULT '0', `user_roomid` INT NOT NULL DEFAULT '1', `user_theme` varchar(30) NOT NULL DEFAULT 'system', `user_sex` INT NOT NULL DEFAULT '0', `user_age` INT NOT NULL DEFAULT '0', `user_tumb` varchar(200) NOT NULL DEFAULT 'default_avatar.png', `user_relation` varchar(50) NOT NULL DEFAULT '', `user_pmusic` varchar(200) NOT NULL DEFAULT '', `pmusic` INT NOT NULL DEFAULT '0', `user_birth` DATE NULL, `user_cover` varchar(100) NOT NULL DEFAULT '', `user_sound` INT NOT NULL DEFAULT '12345', `user_verify` INT NOT NULL DEFAULT '0', `valid_key` varchar(64) NOT NULL DEFAULT '', `country` varchar(10) NOT NULL DEFAULT '', `session_id` INT NOT NULL DEFAULT '1', `pcount` INT NOT NULL DEFAULT '0', `user_news` INT NOT NULL DEFAULT '0', `user_ghost` INT NOT NULL DEFAULT '0', `user_mute` INT NOT NULL DEFAULT '0', `user_rmute` INT NOT NULL DEFAULT '0', `user_mmute` INT NOT NULL DEFAULT '0', `user_pmute` INT NOT NULL DEFAULT '0', `user_banned` INT NOT NULL DEFAULT '0', `user_kick` INT NOT NULL DEFAULT '0', `kick_msg` varchar(300) NOT NULL DEFAULT '', `warn_msg` varchar(500) NOT NULL DEFAULT '', `ban_msg` varchar(300) NOT NULL DEFAULT '', `user_role` INT NOT NULL DEFAULT '0', `user_action` INT NOT NULL DEFAULT '0', `room_mute` INT NOT NULL DEFAULT '0', `user_mood` varchar(100) NOT NULL DEFAULT '', `user_bot` INT NOT NULL DEFAULT '0', `naction` INT NOT NULL DEFAULT '1', `user_private` INT NOT NULL DEFAULT '1', `user_delete` INT NOT NULL DEFAULT '0', `user_gold` INT NOT NULL DEFAULT '0', `user_sgold` INT NOT NULL DEFAULT '0', `last_gold` INT NOT NULL DEFAULT '0', `user_ruby` INT NOT NULL DEFAULT '0', `user_sruby` INT NOT NULL DEFAULT '0', `last_ruby` INT NOT NULL DEFAULT '0', `pdel` varchar(300) NOT NULL DEFAULT '', `pdeltime` INT NOT NULL DEFAULT '0', `ulogin` INT NOT NULL DEFAULT '0', `uvpn` INT NOT NULL DEFAULT '1', `bupload` INT NOT NULL DEFAULT '0', `bcall` INT NOT NULL DEFAULT '0', `bnews` INT NOT NULL DEFAULT '0', `ashare` INT NOT NULL DEFAULT '1', `sshare` INT NOT NULL DEFAULT '1', `lshare` INT NOT NULL DEFAULT '1', `fshare` INT NOT NULL DEFAULT '1', `gshare` INT NOT NULL DEFAULT '1', `ucall` INT NOT NULL DEFAULT '0', `user_call` INT NOT NULL DEFAULT '1', `ufriend` INT NOT NULL DEFAULT '1', `ugcall` INT NOT NULL DEFAULT '0', `user_wall` INT NOT NULL DEFAULT '0', `user_bubble` INT NOT NULL DEFAULT '0', PRIMARY KEY (`user_id`), KEY `user_ip` (`user_ip`), KEY `user_email` (`user_email`), KEY `user_smail` (`user_smail`), KEY `user_roomid` (`user_roomid`), KEY `last_action` (`last_action`), KEY `user_rank` (`user_rank`), KEY `user_bot` (`user_bot`), KEY `user_status` (`user_status`), KEY `user_delete` (`user_delete`), KEY `vip_end` (`vip_end`)) ENGINE=InnoDB AUTO_INCREMENT=147 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_users_data` (`uid` INT NOT NULL AUTO_INCREMENT, `badge_auth` INT NOT NULL DEFAULT '0', `badge_member` INT NOT NULL DEFAULT '0', `badge_chat` INT NOT NULL DEFAULT '0', `badge_top` INT NOT NULL DEFAULT '0', `badge_qtop` INT NOT NULL DEFAULT '0', `badge_ruby` INT NOT NULL DEFAULT '0', `badge_beat` INT NOT NULL DEFAULT '0', `badge_gold` INT NOT NULL DEFAULT '0', `badge_like` INT NOT NULL DEFAULT '0', `badge_friend` INT NOT NULL DEFAULT '0', `badge_gift` INT NOT NULL DEFAULT '0', `user_about` varchar(4000) NOT NULL DEFAULT '', `user_note` varchar(4000) NOT NULL DEFAULT '', PRIMARY KEY (`uid`)) ENGINE=InnoDB AUTO_INCREMENT=147 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_users_gift` (`id` INT NOT NULL AUTO_INCREMENT, `target` INT NOT NULL DEFAULT '0', `gift` INT NOT NULL DEFAULT '0', `gift_count` INT NOT NULL DEFAULT '1', `gift_date` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `target` (`target`), KEY `gift` (`gift`), KEY `gift_date` (`gift_date`)) ENGINE=InnoDB AUTO_INCREMENT=58 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_style` (`id` INT NOT NULL AUTO_INCREMENT, `style_ref` VARCHAR(100) NOT NULL, `style_name` VARCHAR(100) NOT NULL DEFAULT '', `style_active` TINYINT NOT NULL DEFAULT '1', `style_wrap` TEXT, `style_top` TEXT, `style_avatar` TEXT, `style_menu` TEXT, `style_content` TEXT, `style_custom` TEXT, PRIMARY KEY (`id`), UNIQUE KEY `style_ref` (`style_ref`)) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_vip` (`id` INT NOT NULL AUTO_INCREMENT, `userid` INT NOT NULL DEFAULT '11', `userp` varchar(50) NOT NULL DEFAULT '', `plan` varchar(20) NOT NULL DEFAULT '', `price` varchar(20) NOT NULL DEFAULT '', `vdate` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `userid` (`userid`)) ENGINE=InnoDB AUTO_INCREMENT=66 DEFAULT CHARSET=utf8;");
-    $mysqli->query("CREATE TABLE `boom_vpn` (`id` INT NOT NULL AUTO_INCREMENT, `vip` varchar(100) NOT NULL DEFAULT '0', `vtype` INT NOT NULL DEFAULT '0', `vdate` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), KEY `vip` (`vip`), KEY `vtype` (`vtype`), KEY `vdate` (`vdate`)) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
-
-    $database_write = "<?php\r\n" .
-    "// base system prefix\r\n" .
-    "define('BOOM_PREFIX', '$prefix');\r\n\r\n" .
-    "// optional base domain\r\n" .
-    "define('BOOM_DOMAIN', '$domain/');\r\n\r\n" .
-    "// default redis configuration\r\n" .
-    "define('REDIS_IP', '127.0.0.1');\r\n" .
-    "define('REDIS_PORT', 6379);\r\n" .
-    "define('REDIS_TIMEOUT', 0.2);\r\n" .
-    "define('REDIS_PASS', '');\r\n\r\n" .
-    "// you can edit these lines to configure new setting for your chat\r\n" .
-    "define('BOOM_DHOST', '" . $_POST["db_host"] . "');\r\n" .
-    "define('BOOM_DUSER', '" . $_POST["db_user"] . "');\r\n" .
-    "define('BOOM_DPASS', '" . $_POST["db_pass"] . "');\r\n" .
-    "define('BOOM_DNAME', '" . $_POST["db_name"] . "');\r\n\r\n" .
-    "// base system main path do not modify\r\n" .
-    "define('BOOM_PATH', dirname(__DIR__));\r\n\r\n" .
-    "// do not modify those variables\r\n" .
-    "define('BOOM_CRYPT', '" . $encrypt . "');\r\n" .
-    "define('BOOM_INSTALL', 1);\r\n" .
-    "define('BOOM', 1);\r\n" .
-    "?>";
-
-    $database_file = fopen(BOOM_PATH . "/system/database.php", "w+");
-    fwrite($database_file,$database_write);
-    fclose($database_file);
-
-    $settings_write = "<?php\r\n";
-    $settings_write .= "\$setting['id'] = '1';\r\n";
-    $settings_write .= "\$setting['title'] = '$title';\r\n";
-    $settings_write .= "\$setting['site_description'] = '';\r\n";
-    $settings_write .= "\$setting['site_keyword'] = '';\r\n";
-    $settings_write .= "\$setting['login_page'] = 'Default';\r\n";
-    $settings_write .= "\$setting['dat'] = '$password';\r\n";
-    $settings_write .= "\$setting['system_id'] = '2';\r\n";
-    $settings_write .= "\$setting['registration'] = '1';\r\n";
-    $settings_write .= "\$setting['reg_act'] = '0';\r\n";
-    $settings_write .= "\$setting['reg_delay'] = '5';\r\n";
-    $settings_write .= "\$setting['maint_mode'] = '0';\r\n";
-    $settings_write .= "\$setting['use_bridge'] = '0';\r\n";
-    $settings_write .= "\$setting['use_lobby'] = '0';\r\n";
-    $settings_write .= "\$setting['use_logs'] = '123';\r\n";
-    $settings_write .= "\$setting['allow_guest'] = '0';\r\n";
-    $settings_write .= "\$setting['guest_form'] = '0';\r\n";
-    $settings_write .= "\$setting['default_theme'] = 'Dark';\r\n";
-    $settings_write .= "\$setting['allow_theme'] = '50';\r\n";
-    $settings_write .= "\$setting['max_avatar'] = '4';\r\n";
-    $settings_write .= "\$setting['max_cover'] = '9';\r\n";
-    $settings_write .= "\$setting['max_ricon'] = '6';\r\n";
-    $settings_write .= "\$setting['file_weight'] = '10';\r\n";
-    $settings_write .= "\$setting['domain'] = '$domain';\r\n";
-    $settings_write .= "\$setting['allow_avatar'] = '1';\r\n";
-    $settings_write .= "\$setting['allow_cover'] = '100';\r\n";
-    $settings_write .= "\$setting['allow_gcover'] = '100';\r\n";
-    $settings_write .= "\$setting['allow_name_color'] = '50';\r\n";
-    $settings_write .= "\$setting['allow_name_grad'] = '50';\r\n";
-    $settings_write .= "\$setting['allow_name_neon'] = '50';\r\n";
-    $settings_write .= "\$setting['allow_name_font'] = '50';\r\n";
-    $settings_write .= "\$setting['allow_pstyle'] = '50';\r\n";
-    $settings_write .= "\$setting['allow_history'] = '80';\r\n";
-    $settings_write .= "\$setting['allow_main'] = '0';\r\n";
-    $settings_write .= "\$setting['allow_private'] = '1';\r\n";
-    $settings_write .= "\$setting['allow_cupload'] = '100';\r\n";
-    $settings_write .= "\$setting['allow_pupload'] = '100';\r\n";
-    $settings_write .= "\$setting['allow_wupload'] = '100';\r\n";
-    $settings_write .= "\$setting['allow_direct'] = '70';\r\n";
-    $settings_write .= "\$setting['allow_room'] = '90';\r\n";
-    $settings_write .= "\$setting['allow_vroom'] = '90';\r\n";
-    $settings_write .= "\$setting['allow_quote'] = '50';\r\n";
-    $settings_write .= "\$setting['allow_pquote'] = '50';\r\n";
-    $settings_write .= "\$setting['allow_video'] = '100';\r\n";
-    $settings_write .= "\$setting['allow_audio'] = '100';\r\n";
-    $settings_write .= "\$setting['allow_zip'] = '100';\r\n";
-    $settings_write .= "\$setting['use_like'] = '1';\r\n";
-    $settings_write .= "\$setting['use_flag'] = '1';\r\n";
-    $settings_write .= "\$setting['use_gender'] = '1';\r\n";
-    $settings_write .= "\$setting['use_geo'] = '1';\r\n";
-    $settings_write .= "\$setting['version'] = '10';\r\n";
-    $settings_write .= "\$setting['bbfv'] = '1.03';\r\n";
-    $settings_write .= "\$setting['language'] = '$language';\r\n";
-    $settings_write .= "\$setting['activation'] = '0';\r\n";
-    $settings_write .= "\$setting['use_wall'] = '1';\r\n";
-    $settings_write .= "\$setting['timezone'] = 'America/Toronto';\r\n";
-    $settings_write .= "\$setting['boom'] = 'nulledbyblackhunterandfxntxm';\r\n";
-    $settings_write .= "\$setting['min_age'] = '14';\r\n";
-    $settings_write .= "\$setting['allow_colors'] = '50';\r\n";
-    $settings_write .= "\$setting['allow_grad'] = '50';\r\n";
-    $settings_write .= "\$setting['allow_neon'] = '50';\r\n";
-    $settings_write .= "\$setting['allow_font'] = '50';\r\n";
-    $settings_write .= "\$setting['allow_mood'] = '100';\r\n";
-    $settings_write .= "\$setting['allow_scontent'] = '70';\r\n";
-    $settings_write .= "\$setting['allow_rnews'] = '1';\r\n";
-    $settings_write .= "\$setting['allow_about'] = '100';\r\n";
-    $settings_write .= "\$setting['allow_report'] = '1';\r\n";
-    $settings_write .= "\$setting['emo_plus'] = '50';\r\n";
-    $settings_write .= "\$setting['speed'] = '3000';\r\n";
-    $settings_write .= "\$setting['player_id'] = '1';\r\n";
-    $settings_write .= "\$setting['max_main'] = '600';\r\n";
-    $settings_write .= "\$setting['max_private'] = '500';\r\n";
-    $settings_write .= "\$setting['word_action'] = '2';\r\n";
-    $settings_write .= "\$setting['word_delay'] = '30';\r\n";
-    $settings_write .= "\$setting['spam_action'] = '0';\r\n";
-    $settings_write .= "\$setting['spam_delay'] = '60';\r\n";
-    $settings_write .= "\$setting['flood_action'] = '1';\r\n";
-    $settings_write .= "\$setting['flood_delay'] = '5';\r\n";
-    $settings_write .= "\$setting['vpn_delay'] = '5';\r\n";
-    $settings_write .= "\$setting['email_filter'] = '0';\r\n";
-    $settings_write .= "\$setting['max_username'] = '18';\r\n";
-    $settings_write .= "\$setting['chat_delete'] = '0';\r\n";
-    $settings_write .= "\$setting['private_delete'] = '0';\r\n";
-    $settings_write .= "\$setting['wall_delete'] = '0';\r\n";
-    $settings_write .= "\$setting['member_delete'] = '0';\r\n";
-    $settings_write .= "\$setting['room_delete'] = '0';\r\n";
-    $settings_write .= "\$setting['ignore_delete'] = '0';\r\n";
-    $settings_write .= "\$setting['max_offcount'] = '10';\r\n";
-    $settings_write .= "\$setting['site_email'] = 'yoursiteemail@email.com';\r\n";
-    $settings_write .= "\$setting['email_from'] = 'Codychat';\r\n";
-    $settings_write .= "\$setting['mail_type'] = 'mail';\r\n";
-    $settings_write .= "\$setting['smtp_host'] = '';\r\n";
-    $settings_write .= "\$setting['smtp_username'] = '';\r\n";
-    $settings_write .= "\$setting['smtp_password'] = '';\r\n";
-    $settings_write .= "\$setting['smtp_port'] = '465';\r\n";
-    $settings_write .= "\$setting['smtp_type'] = 'tls';\r\n";
-    $settings_write .= "\$setting['allow_name'] = '100';\r\n";
-    $settings_write .= "\$setting['act_delay'] = '0';\r\n";
-    $settings_write .= "\$setting['cookie_law'] = '1';\r\n";
-    $settings_write .= "\$setting['use_recapt'] = '0';\r\n";
-    $settings_write .= "\$setting['recapt_key'] = '';\r\n";
-    $settings_write .= "\$setting['recapt_secret'] = '';\r\n";
-    $settings_write .= "\$setting['can_raction'] = '90';\r\n";
-    $settings_write .= "\$setting['can_mute'] = '90';\r\n";
-    $settings_write .= "\$setting['can_warn'] = '90';\r\n";
-    $settings_write .= "\$setting['can_kick'] = '90';\r\n";
-    $settings_write .= "\$setting['can_ghost'] = '90';\r\n";
-    $settings_write .= "\$setting['can_ban'] = '90';\r\n";
-    $settings_write .= "\$setting['can_delete'] = '90';\r\n";
-    $settings_write .= "\$setting['can_modavat'] = '90';\r\n";
-    $settings_write .= "\$setting['can_modcover'] = '90';\r\n";
-    $settings_write .= "\$setting['can_modmood'] = '90';\r\n";
-    $settings_write .= "\$setting['can_modabout'] = '90';\r\n";
-    $settings_write .= "\$setting['can_modcolor'] = '90';\r\n";
-    $settings_write .= "\$setting['can_modname'] = '90';\r\n";
-    $settings_write .= "\$setting['can_modemail'] = '90';\r\n";
-    $settings_write .= "\$setting['can_modpass'] = '90';\r\n";
-    $settings_write .= "\$setting['can_modblock'] = '90';\r\n";
-    $settings_write .= "\$setting['can_modvpn'] = '90';\r\n";
-    $settings_write .= "\$setting['can_verify'] = '90';\r\n";
-    $settings_write .= "\$setting['can_vip'] = '90';\r\n";
-    $settings_write .= "\$setting['can_vemail'] = '90';\r\n";
-    $settings_write .= "\$setting['can_vghost'] = '90';\r\n";
-    $settings_write .= "\$setting['can_vother'] = '90';\r\n";
-    $settings_write .= "\$setting['can_vname'] = '90';\r\n";
-    $settings_write .= "\$setting['can_vhistory'] = '90';\r\n";
-    $settings_write .= "\$setting['can_note'] = '90';\r\n";
-    $settings_write .= "\$setting['can_news'] = '90';\r\n";
-    $settings_write .= "\$setting['can_rank'] = '90';\r\n";
-    $settings_write .= "\$setting['can_auth'] = '100';\r\n";
-    $settings_write .= "\$setting['can_inv'] = '100';\r\n";
-    $settings_write .= "\$setting['can_clear'] = '80';\r\n";
-    $settings_write .= "\$setting['can_bpriv'] = '90';\r\n";
-    $settings_write .= "\$setting['can_rpass'] = '80';\r\n";
-    $settings_write .= "\$setting['can_topic'] = '80';\r\n";
-    $settings_write .= "\$setting['can_content'] = '90';\r\n";
-    $settings_write .= "\$setting['can_maddons'] = '90';\r\n";
-    $settings_write .= "\$setting['can_mroom'] = '90';\r\n";
-    $settings_write .= "\$setting['can_mfilter'] = '90';\r\n";
-    $settings_write .= "\$setting['can_dj'] = '90';\r\n";
-    $settings_write .= "\$setting['can_cuser'] = '90';\r\n";
-    $settings_write .= "\$setting['can_mip'] = '90';\r\n";
-    $settings_write .= "\$setting['can_mlogs'] = '90';\r\n";
-    $settings_write .= "\$setting['can_mplay'] = '90';\r\n";
-    $settings_write .= "\$setting['can_mcontact'] = '90';\r\n";
-    $settings_write .= "\$setting['use_vpn'] = '0';\r\n";
-    $settings_write .= "\$setting['vpn_key'] = '';\r\n";
-    $settings_write .= "\$setting['coppa'] = '0';\r\n";
-    $settings_write .= "\$setting['redis_status'] = '0';\r\n";
-    $settings_write .= "\$setting['max_flood'] = '6';\r\n";
-    $settings_write .= "\$setting['max_emo'] = '10';\r\n";
-    $settings_write .= "\$setting['max_room'] = '1';\r\n";
-    $settings_write .= "\$setting['max_reg'] = '5';\r\n";
-    $settings_write .= "\$setting['max_greg'] = '25';\r\n";
-    $settings_write .= "\$setting['curset'] = '46';\r\n";
-    $settings_write .= "\$setting['privload'] = '1';\r\n";
-    $settings_write .= "\$setting['can_rclear'] = '9';\r\n";
-    $settings_write .= "\$setting['can_rlogs'] = '6';\r\n";
-    $settings_write .= "\$setting['use_level'] = '1';\r\n";
-    $settings_write .= "\$setting['level_mode'] = '5';\r\n";
-    $settings_write .= "\$setting['exp_chat'] = '1';\r\n";
-    $settings_write .= "\$setting['exp_priv'] = '1';\r\n";
-    $settings_write .= "\$setting['exp_gift'] = '1';\r\n";
-    $settings_write .= "\$setting['exp_post'] = '1';\r\n";
-    $settings_write .= "\$setting['use_rate'] = '0';\r\n";
-    $settings_write .= "\$setting['rate_limit'] = '50';\r\n";
-    $settings_write .= "\$setting['word_proof'] = '90';\r\n";
-    $settings_write .= "\$setting['use_badge'] = '1';\r\n";
-    $settings_write .= "\$setting['bachat'] = '10';\r\n";
-    $settings_write .= "\$setting['bagift'] = '10';\r\n";
-    $settings_write .= "\$setting['balike'] = '10';\r\n";
-    $settings_write .= "\$setting['bafriend'] = '10';\r\n";
-    $settings_write .= "\$setting['baruby'] = '100';\r\n";
-    $settings_write .= "\$setting['bagold'] = '5000';\r\n";
-    $settings_write .= "\$setting['babeat'] = '1000';\r\n";
-    $settings_write .= "\$setting['use_gift'] = '1';\r\n";
-    $settings_write .= "\$setting['use_wallet'] = '1';\r\n";
-    $settings_write .= "\$setting['can_vwallet'] = '70';\r\n";
-    $settings_write .= "\$setting['can_swallet'] = '1';\r\n";
-    $settings_write .= "\$setting['can_ruby'] = '1';\r\n";
-    $settings_write .= "\$setting['ruby_delay'] = '60';\r\n";
-    $settings_write .= "\$setting['ruby_base'] = '1';\r\n";
-    $settings_write .= "\$setting['can_gold'] = '1';\r\n";
-    $settings_write .= "\$setting['gold_delay'] = '2';\r\n";
-    $settings_write .= "\$setting['gold_base'] = '2';\r\n";
-    $settings_write .= "\$setting['use_call'] = '2';\r\n";
-    $settings_write .= "\$setting['can_acall'] = '100';\r\n";
-    $settings_write .= "\$setting['can_vcall'] = '100';\r\n";
-    $settings_write .= "\$setting['call_appid'] = '';\r\n";
-    $settings_write .= "\$setting['call_secret'] = '';\r\n";
-    $settings_write .= "\$setting['call_max'] = '60';\r\n";
-    $settings_write .= "\$setting['call_method'] = '1';\r\n";
-    $settings_write .= "\$setting['call_cost'] = '1';\r\n";
-    $settings_write .= "\$setting['live_url'] = '';\r\n";
-    $settings_write .= "\$setting['live_appid'] = '';\r\n";
-    $settings_write .= "\$setting['live_secret'] = '';\r\n";
-    $settings_write .= "\$setting['use_app'] = '1';\r\n";
-    $settings_write .= "\$setting['app_name'] = 'Chat';\r\n";
-    $settings_write .= "\$setting['app_color'] = '#000000';\r\n";
-    $settings_write .= "\$setting['openai_key'] = '';\r\n";
-    $settings_write .= "\$setting['mod_cat'] = '';\r\n";
-    $settings_write .= "\$setting['img_mod'] = '0';\r\n";
-    $settings_write .= "\$setting['can_gcall'] = '100';\r\n";
-    $settings_write .= "\$setting['can_mgcall'] = '100';\r\n";
-    $settings_write .= "\$setting['max_gcall'] = '180';\r\n";
-    $settings_write .= "\$setting['can_agcall'] = '100';\r\n";
-    $settings_write .= "\$setting['can_vgcall'] = '100';\r\n";
-    $settings_write .= "\$setting['log_mode'] = '1';\r\n";
-    $settings_write .= "\$setting['can_pmusic'] = '1';\r\n";
-    $settings_write .= "\$setting['allow_pmusic'] = '100';\r\n";
-    $settings_write .= "\$setting['left_mode'] = '1';\r\n";
-    $settings_write .= "?>";
-
-    $settings_file = fopen(BOOM_PATH . "/system/settings.php", "w+");
-    fwrite($settings_file,$settings_write);
-    fclose($settings_file);
-
-    $mysqli->query("INSERT INTO `boom_setting` (id, title, domain, language, default_theme, system_id, boom) VALUES (1, '" . $title . "', '" . $domain . "', '" . $language . "', 'Dark', 2, 'nulledbyblackhunterandfxntxm')");
-    $mysqli->query("INSERT INTO `boom_users` (user_id, user_name, user_email, user_join, user_password, user_language, user_rank,  user_verify, user_timezone) VALUES (1, '" . $username . "', '" . $email . "', '" . $time . "', '" . $password . "', '" . $language . "', '100', '1', 'America/Toronto')");
-    $mysqli->query("INSERT INTO `boom_users_data` (`uid`, `badge_auth`, `badge_member`, `badge_chat`, `badge_top`, `badge_qtop`, `badge_ruby`, `badge_beat`, `badge_gold`, `badge_like`, `badge_friend`, `badge_gift`, `user_about`, `user_note`) VALUES ('1', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '', '')");
-    $mysqli->query("INSERT INTO `boom_style` (`style_ref`, `style_name`, `style_active`, `style_wrap`, `style_menu`) VALUES ('amber_orange', 'Amber Orange', '1', 'border:1px solid rgba(255,140,0,0.6); box-shadow:0 0 16px rgba(255,140,0,0.45), 0 0 40px rgba(255,140,0,0.30);', 'background:linear-gradient(to bottom, rgba(200,110,0,1), rgba(150,80,0,1));'), ('neon_blue', 'Neon Blue', '1', 'border:1px solid rgba(0,190,255,0.6); box-shadow:0 0 16px rgba(0,190,255,0.45), 0 0 40px rgba(0,190,255,0.30);', 'background:linear-gradient(to bottom, rgba(0,150,200,1), rgba(0,110,160,1));'), ('cherry_red', 'Cherry Red', '1', 'border:1px solid rgba(255,80,80,0.6); box-shadow:0 0 16px rgba(255,80,80,0.45), 0 0 40px rgba(255,80,80,0.30);', 'background:linear-gradient(to bottom, rgba(200,60,60,1), rgba(150,40,40,1));'), ('emerald_green', 'Emerald Green', '1', 'border:1px solid rgba(70,200,110,0.6); box-shadow:0 0 16px rgba(70,200,110,0.45), 0 0 40px rgba(70,200,110,0.30);', 'background:linear-gradient(to bottom, rgba(60,160,90,1), rgba(40,120,65,1));')");
-    $mysqli->query("INSERT INTO `boom_exp` (`uid`, `exp_current`, `exp_week`, `exp_month`, `exp_total`) VALUES ('1', '0', '0', '0', '0')");
-    
-    $sysPass = function_exists('randomPass') ? randomPass() : md5(rand());
-    $mysqli->query("INSERT INTO `boom_users` (user_id, user_name, user_ip, user_join, user_password, user_rank, user_tumb, user_bot) VALUES (2, 'System', '0.0.0.0', '" . $time . "', '" . $sysPass . "', '69', 'default_system.png', '1')");
-    $mysqli->query("INSERT INTO boom_rooms ( room_id, room_name, room_system, room_action, room_creator ) VALUES (1, 'Main room', 1, '" . $time . "', '1')");
-    
-    $term = isset($term_content) ? $term_content : '';$priv = isset($privacy_content) ?$privacy_content : '';
-    $help = isset($help_content) ? $help_content : '';$mysqli->query("INSERT INTO `boom_page` (`page_id`, `page_name`, `page_content`) VALUES (1, 'terms_of_use', '" . $term . "'), (2, 'privacy_policy', '" . $priv . "'), (3, 'rules', '" . $help . "')");
-    
-    $mysqli->query("INSERT INTO boom_filter (word, word_type) VALUES\r\n\t('aol','email'),('att','email'),('comcast','email'),('facebook','email'),('gmail','email'),('gmx','email'),('googlemail','email'),('google','email'),('hotmail','email'),('mac','email'),('me','email'),('mail','email'),('msn','email'),('live','email'),('sbcglobal','email'),\r\n\t('verizon','email'),('yahoo','email'),('email','email'),('fastmail','email'),('games','email'),('hush','email'),('hushmail','email'),('icloud','email'),('iname','email'),('inbox','email'),('lavabit','email'),('love','email'),('outlook','email'),('pobox','email'),\r\n\t('protonmail','email'),('rocketmail','email'),('safe-mail','email'),('wow','email'),('ygm','email'),('ymail','email'),('zoho','email'),('yandex','email'),('bellsouth','email'),('charter','email'),('cox','email'),('earthlink','email'),('juno','email'),\r\n\t('btinternet','email'),('virginmedia','email'),('blueyonder','email'),('freeserve','email'),('ntlworld','email'),('o2','email'),('orange','email'),('sky','email'),('talktalk','email'),('tiscali','email'),('virgin','email'),('wanadoo','email'),\r\n\t('bt','email'),('sina','email'),('qq','email'),('naver','email'),('hanmail','email'),('daum','email'),('nate','email'),('laposte','email'),('gmx','email'),('sfr','email'),('neuf','email'),('free','email'),('online','email'),('t-online','email'),('web','email'),\r\n\t('libero','email'),('virgilio','email'),('alice','email'),('tin','email'),('poste','email'),('teletu','email'),('mail','email'),('rambler','email'),('ya','email'),('list','email'),('skynet','email'),('voo','email'),('tvcablenet','email'),('telenet','email'),\r\n\t('fibertel','email'),('speedy','email'),('arnet','email'),('prodigy.mx','email'),('uol','email'),('bol','email'),('terra','email'),('ig','email'),('itelefonica','email'),('r7','email'),('zipmail','email'),('globo','email'),('globomail','email'),('oi','email')\r\n\t");
-    $mysqli->query("INSERT INTO `boom_gift` (`id`, `gift_image`, `gift_title`, `gift_method`, `gift_cost`, `gift_rank`) VALUES (1, 'clover.svg', 'Lucky clover', 1, 100, 1),\r\n(2, 'clown.svg', 'Clown face', 1, 100, 1),\r\n(3, 'coffee.svg', 'Hot coffee cup', 1, 100, 1),\r\n(4, 'cool.svg', 'Cool guy face', 1, 100, 1),\r\n(5, 'crown.svg', 'Nice crown', 1, 100, 1),\r\n(6, 'cure.svg', 'Magic potion', 1, 100, 1),\r\n(7, 'diamond.svg', 'Glossy diamond', 1, 100, 1),\r\n(8, 'fishbone.svg', 'Fish bones', 1, 100, 1),\r\n(9, 'flowers.svg', 'Flower bouquet', 1, 100, 1),\r\n(10, 'gift.svg', 'Gift box', 1, 100, 1),\r\n(11, 'goldpot.svg', 'Pot of gold', 1, 100, 1),\r\n(12, 'hot.svg', 'Hot fire flame', 1, 100, 1),\r\n(13, 'icecream.svg', 'Ice cream', 1, 100, 1),\r\n(14, 'karma.svg', 'Karma back', 1, 100, 1),\r\n(15, 'kiss.svg', 'Gentle kiss', 1, 100, 1),\r\n(16, 'like.svg', 'Tumbs up', 1, 100, 1),\r\n(17, 'love.svg', 'Love', 1, 100, 1),\r\n(18, 'lovepotion.svg', 'Love potion', 1, 100, 1),\r\n(19, 'loverepair.svg', 'Broken heart', 1, 100, 1),\r\n(20, 'medal.svg', 'Winner medal', 1, 100, 1),\r\n(21, 'money.svg', 'Pile of cash', 1, 100, 1),\r\n(22, 'pizza.svg', 'Pizza slice', 1, 100, 1),\r\n(23, 'poison.svg', 'Poison potion', 1, 100, 1),\r\n(24, 'power.svg', 'Energy potion', 1, 100, 1),\r\n(25, 'ring.svg', 'Expensive ring', 1, 100, 1),\r\n(26, 'rose.svg', 'Fresh rose', 1, 100, 1),\r\n(27, 'smile.svg', 'Smiley face', 1, 100, 1),\r\n(28, 'star.svg', 'Night star', 1, 100, 1),\r\n(29, 'teddy.svg', 'Teddy bear', 1, 100, 1),\r\n(30, 'trophy.svg', 'Gold trophy', 1, 100, 1),\r\n(31, 'voodoo.svg', 'Voodo doll', 1, 100, 1),\r\n(34, 'energy.svg', 'Power energy', 1, 100, 1)");
-    
-    return boomCode(1);
-}
+<?php //004fb
+if(!extension_loaded('ionCube Loader')){$__oc=strtolower(substr(php_uname(),0,3));$__ln='ioncube_loader_'.$__oc.'_'.substr(phpversion(),0,3).(($__oc=='win')?'.dll':'.so');if(function_exists('dl')){@dl($__ln);}if(function_exists('_il_exec')){return _il_exec();}$__ln='/ioncube/'.$__ln;$__oid=$__id=realpath(ini_get('extension_dir'));$__here=dirname(__FILE__);if(strlen($__id)>1&&$__id[1]==':'){$__id=str_replace('\\','/',substr($__id,2));$__here=str_replace('\\','/',substr($__here,2));}$__rd=str_repeat('/..',substr_count($__id,'/')).$__here.'/';$__i=strlen($__rd);while($__i--){if($__rd[$__i]=='/'){$__lp=substr($__rd,0,$__i).$__ln;if(file_exists($__oid.$__lp)){$__ln=$__lp;break;}}}if(function_exists('dl')){@dl($__ln);}}else{die('The file '.__FILE__." is corrupted.\n");}if(function_exists('_il_exec')){return _il_exec();}echo("Site error: the ".(php_sapi_name()=='cli'?'ionCube':'<a href="http://www.ioncube.com">ionCube</a>')." PHP Loader needs to be installed. This is a widely used PHP extension for running ionCube protected PHP code, website security and malware blocking.\n\nPlease visit ".(php_sapi_name()=='cli'?'get-loader.ioncube.com':'<a href="http://get-loader.ioncube.com">get-loader.ioncube.com</a>')." for install assistance.\n\n");exit(199);
 ?>
+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
