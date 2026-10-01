@@ -3,14 +3,14 @@ FROM php:7.4-apache
 # تثبيت أداة تثبيت الإضافات الجاهزة (تتعامل مع كل الاعتماديات تلقائيًا)
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 
-# تثبيت الإضافات المطلوبة متوافقة مع PHP 7.4 تلقائيًا (تمت إزالة تعديل buster الخاص بـ php 7.2 لعدم الحاجة له)
+# تثبيت الإضافات المطلوبة متوافقة مع PHP 7.4
 RUN install-php-extensions gd zip mbstring opcache pdo_mysql mysqli ioncube_loader redis
 
 # تفعيل mod_rewrite حتى يشتغل ملف htaccess
 RUN a2enmod rewrite
 
 # السماح بـ .htaccess (AllowOverride All)
-RUN sed -i '/<Directory \/var\/www\/>/,/<\/Directory> s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
+RUN sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
 
 # إنشاء مجلد مخصص للجلسات وتعيين صلاحيات الكتابة لـ Apache
 RUN mkdir -p /var/lib/php/sessions \
