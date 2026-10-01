@@ -2,7 +2,18 @@ var waitInstall = 0;
 var inKey = '';
 var inMail = '';
 
-// تم التعديل لتجاوز شرط الموافقة والانتقال المباشر لفحص الأذونات ونموذج التثبيت
+// تشغيل الفحص وجلب نموذج التثبيت تلقائياً فور تحميل الصفحة
+document.addEventListener('DOMContentLoaded', function() {
+	checkPermission();
+});
+
+// دعم إضافي لـ jQuery في حال عدم اكتمال التحميل الفوري
+if (typeof $ !== 'undefined') {
+	$(document).ready(function(){
+		checkPermission();
+	});
+}
+
 startInstall = function(){
 	checkPermission();
 }
@@ -119,9 +130,11 @@ callSaved = function(text, type){
 }
 
 selectIt = function(){
-	$("select:visible").selectBoxIt({ 
-		autoWidth: false,
-		hideEffect: 'fadeOut',
-		hideEffectSpeed: 100
-	});
+	if ($.fn.selectBoxIt) {
+		$("select:visible").selectBoxIt({ 
+			autoWidth: false,
+			hideEffect: 'fadeOut',
+			hideEffectSpeed: 100
+		});
+	}
 }
