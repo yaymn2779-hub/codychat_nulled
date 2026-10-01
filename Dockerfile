@@ -1,9 +1,14 @@
-FROM php:8.1-apache
+FROM php:7.2-apache
+
+# PHP 7.2 مبني على Debian Buster القديم، مستودعاته انتقلت للأرشيف
+RUN sed -i 's|deb.debian.org|archive.debian.org|g; s|security.debian.org|archive.debian.org|g; /buster-updates/d' /etc/apt/sources.list \
+    && echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid
 
 # تثبيت أداة تثبيت الإضافات الجاهزة (تتعامل مع كل الاعتماديات تلقائيًا)
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 
-RUN install-php-extensions gd zip curl mbstring opcache pdo_mysql mysqli ioncube_loader redis
+# redis-5.3.7 هي آخر نسخة تدعم PHP 7.2 (curl مضمّن أصلاً في الصورة)
+RUN install-php-extensions gd zip mbstring opcache pdo_mysql mysqli ioncube_loader redis-5.3.7
 
 # تفعيل mod_rewrite حتى يشتغل ملف htaccess
 RUN a2enmod rewrite
@@ -16,7 +21,7 @@ RUN mkdir -p /var/lib/php/sessions \
     && chown -R www-data:www-data /var/lib/php/sessions \
     && chmod -R 777 /var/lib/php/sessions
 
-# إعدادات PHP: رفع الحدود + تثبيت وحماية الجلسات + عرض الأخطاء + تسجيل الأخطاء
+# إعدادات PHP: رفع الحدود + حماية الجلسات + عرض الأخطاء + تسجيل الأخطاء
 RUN { \
     echo 'memory_limit = 512M'; \
     echo 'max_execution_time = 300'; \
@@ -30,7 +35,6 @@ RUN { \
     echo 'session.save_path = "/var/lib/php/sessions"'; \
     echo 'session.cookie_httponly = On'; \
     echo 'session.use_only_cookies = On'; \
-    echo 'session.same_site = "Lax"'; \
     } > /usr/local/etc/php/conf.d/custom.ini
 
 # نسخ ملفات المشروع
