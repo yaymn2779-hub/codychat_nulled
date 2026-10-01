@@ -8,7 +8,6 @@ require(__DIR__ . '/../system/config_version.php');
     <title>Codychat Installation</title>
     <link rel="stylesheet" href="builder/install_2.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="builder/install_2.js"></script>
 </head>
 <body>
     <div id="container_install">
@@ -17,18 +16,24 @@ require(__DIR__ . '/../system/config_version.php');
         </div>
         <div id="install_box">
             <div id="install_content">
-                <!-- سيتم جلب حقول البيانات هنا تلقائياً -->
+                <p style="text-align:center; padding:20px;">جاري تحميل نموذج البيانات...</p>
             </div>
             <div id="wait_install" style="display:none; text-align:center; padding:20px;">
                 <p>جاري التثبيت... يرجى الانتظار</p>
             </div>
         </div>
     </div>
-    
+
     <script>
+        // جلب عناصر التثبيت وحقول البيانات مباشرة من السيرفر
         $(document).ready(function(){
-            // استدعاء فحص التصاريح ونموذج التثبيت مباشرة عند تحميل الصفحة
-            checkPermission();
+            $.post('builder/element_2.php', { check: 1 }, function(response) {
+                $('#install_content').html(response);
+            }).fail(function() {
+                $.post('builder/element.php', { check: 1 }, function(response) {
+                    $('#install_content').html(response);
+                });
+            });
         });
     </script>
 </body>
