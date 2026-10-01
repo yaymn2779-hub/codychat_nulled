@@ -1,20 +1,16 @@
-FROM php:7.2-apache
-
-# PHP 7.2 مبني على Debian Buster القديم، مستودعاته انتقلت للأرشيف
-RUN sed -i 's|deb.debian.org|archive.debian.org|g; s|security.debian.org|archive.debian.org|g; /buster-updates/d' /etc/apt/sources.list \
-    && echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid
+FROM php:7.4-apache
 
 # تثبيت أداة تثبيت الإضافات الجاهزة (تتعامل مع كل الاعتماديات تلقائيًا)
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 
-# redis-5.3.7 هي آخر نسخة تدعم PHP 7.2 (curl مضمّن أصلاً في الصورة)
-RUN install-php-extensions gd zip mbstring opcache pdo_mysql mysqli ioncube_loader redis-5.3.7
+# تثبيت الإضافات المطلوبة متوافقة مع PHP 7.4 تلقائيًا (تمت إزالة تعديل buster الخاص بـ php 7.2 لعدم الحاجة له)
+RUN install-php-extensions gd zip mbstring opcache pdo_mysql mysqli ioncube_loader redis
 
 # تفعيل mod_rewrite حتى يشتغل ملف htaccess
 RUN a2enmod rewrite
 
 # السماح بـ .htaccess (AllowOverride All)
-RUN sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
+RUN sed -i '/<Directory \/var\/www\/>/,/<\/Directory> s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
 
 # إنشاء مجلد مخصص للجلسات وتعيين صلاحيات الكتابة لـ Apache
 RUN mkdir -p /var/lib/php/sessions \
@@ -41,7 +37,6 @@ RUN { \
 COPY . /var/www/html/
 
 # سكربت تشخيص: يسجل تفاصيل أي طلب متعلق بإضافة Avatar_Frame-BLK
-# (POST data + آخر خطأ PHP + حالة الـ output buffer) حتى لو سكربت مشفّر عمل exit بصمت
 RUN mkdir -p /var/www/html/system && { \
     echo '<?php'; \
     echo "if (strpos(\$_SERVER['REQUEST_URI'] ?? '', 'Avatar_Frame-BLK') !== false) {"; \
