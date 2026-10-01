@@ -7,5 +7,5 @@ $DB_NAME = "railway";
 
 // Please do not modify this line post installation
 $encryption = "";
-$check_install = 0;
+$check_install = 1;
 ?>
