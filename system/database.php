@@ -1,11 +1,11 @@
 <?php
-// you can edit these lines to configure new setting for your chat
+// بيانات الاتصال بقاعدة البيانات على Railway
 $DB_HOST = "mysql.railway.internal";
 $DB_USER = "root";
 $DB_PASS = "IdFUchIKKUJYTYpMcJowZPbnQgQNgkew";
 $DB_NAME = "railway";
 
-// Please do not modify this line post installation
-$encryption = "";
-$check_install = 0;
+// مفتاح التشفير وتفعيل التثبيت
+$encryption = "codychat_secret_key_123456";
+$check_install = 1;
 ?>
