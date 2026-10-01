@@ -2,22 +2,14 @@ var waitInstall = 0;
 var inKey = '';
 var inMail = '';
 
-// تشغيل الفحص وجلب نموذج التثبيت تلقائياً فور تحميل الصفحة
-document.addEventListener('DOMContentLoaded', function() {
-	checkPermission();
-});
-
-// دعم إضافي لـ jQuery في حال عدم اكتمال التحميل الفوري
-if (typeof $ !== 'undefined') {
-	$(document).ready(function(){
-		checkPermission();
-	});
-}
-
 startInstall = function(){
-	checkPermission();
+	if($('.install_accept').attr('value') == 1){
+		checkPermission();
+	}
+	else {
+		callSaved('You must accept condition to start intallation', 3);
+	}
 }
-
 acceptCondition = function(item){
 	var ac = $(this);
 	if($(item).attr('value') == 1){
@@ -29,7 +21,6 @@ acceptCondition = function(item){
 		$(item).removeClass('fa-circle').addClass('fa-check-circle');	
 	}
 }
-
 runInstaller = function(){
 	if(waitInstall == 0){
 		$('#install_component').hide();
@@ -77,11 +68,9 @@ runInstaller = function(){
 		return false;
 	}
 }
-
 endInstall = function(){
 	window.location.reload();
 }
-
 checkPermission = function(){
 	$.post('builder/permission.php', { 
 		check: 1,
@@ -95,7 +84,6 @@ checkPermission = function(){
 			}
 	});	
 }
-
 getComponent = function(){
 	$.post('builder/element.php', { 
 		check: 1,
@@ -105,7 +93,6 @@ getComponent = function(){
 	});	
 	
 }
-
 getEnding = function(){
 	$.post('builder/ending.php', { 
 		check: 1,
@@ -114,7 +101,6 @@ getEnding = function(){
 	});	
 	
 }
-
 callSaved = function(text, type){
 	if(type == 1){
 		$('.saved_data').removeClass('saved_warn saved_error').addClass('saved_ok');
@@ -128,13 +114,10 @@ callSaved = function(text, type){
 	$('.saved_span').text(text);
 	$('.saved_data').fadeIn(300).delay(3000).fadeOut();
 }
-
 selectIt = function(){
-	if ($.fn.selectBoxIt) {
-		$("select:visible").selectBoxIt({ 
-			autoWidth: false,
-			hideEffect: 'fadeOut',
-			hideEffectSpeed: 100
-		});
-	}
+	$("select:visible").selectBoxIt({ 
+		autoWidth: false,
+		hideEffect: 'fadeOut',
+		hideEffectSpeed: 100
+	});
 }
