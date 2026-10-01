@@ -1,35 +1,23 @@
 var waitInstall = 0;
+var inKey = '';
+var inMail = '';
 
+// تم التعديل لتجاوز شرط الموافقة والانتقال المباشر لفحص الأذونات ونموذج التثبيت
 startInstall = function(){
-	if($('.accept_install').attr('data-value') == 1 || $('.accept_install').attr('value') == 1){
-		checkPermission();
-	} else {
-		callSaved('You must accept condition to start installation', 3);
-	}
+	checkPermission();
 }
 
 acceptCondition = function(item){
-	var $elem = $(item);
-	var val = $elem.attr('data-value') || $elem.attr('value') || "0";
-	if(val == "1"){
-		$elem.attr('data-value', '0').attr('value', '0');
-		$elem.removeClass('fa-check-circle').addClass('fa-circle');
-		$('#start_install').prop('disabled', true);
-	} else {
-		$elem.attr('data-value', '1').attr('value', '1');
-		$elem.removeClass('fa-circle').addClass('fa-check-circle');
-		$('#start_install').prop('disabled', false);
+	var ac = $(this);
+	if($(item).attr('value') == 1){
+		$(item).attr('value', 0);
+		$(item).removeClass('fa-check-circle').addClass('fa-circle');
+	}
+	else {
+		$(item).attr('value', 1);
+		$(item).removeClass('fa-circle').addClass('fa-check-circle');	
 	}
 }
-
-// تشغيل التحديد وتفعيل الزر
-$(document).on('click', '.agreement', function(){
-	acceptCondition($(this).find('.accept_install'));
-});
-
-$(document).on('click', '#start_install', function(){
-	startInstall();
-});
 
 runInstaller = function(){
 	if(waitInstall == 0){
@@ -52,12 +40,14 @@ runInstaller = function(){
 				email: $('#install_email').val(),
 				password: $('#install_password').val(),
 				repeat: $('#install_repeat').val(),
-				language: $('#install_language').val()
+				language: $('#install_language').val(),
+				purchase: $('#install_purchase').val()
 			},
 			success: function(response){
 				if(response.code == 1) {
 					getEnding();
-				} else {
+				}
+				else {
 					callSaved(response.error, 3);
 					waitInstall = 0;
 					$('#wait_install').hide();
@@ -72,6 +62,9 @@ runInstaller = function(){
 			}
 		});
 	}
+	else {
+		return false;
+	}
 }
 
 endInstall = function(){
@@ -79,33 +72,50 @@ endInstall = function(){
 }
 
 checkPermission = function(){
-	$.post('builder/permission.php', { check: 1 }, function(response) {
-		$('#install_content').html(response);
+	$.post('builder/permission.php', { 
+		check: 1,
+		}, function(response) {
+			if(response == 1){
+				getComponent();
+			}
+			else{
+				$('#install_content').html(response);
+				callSaved('Please correct following errors', 3);
+			}
 	});	
 }
 
 getComponent = function(){
-	$.post('builder/element.php', { check: 1 }, function(response) {
-		$('#install_content').html(response);
-		if($.fn.selectBoxIt) {
-			selectIt();
-		}
+	$.post('builder/element.php', { 
+		check: 1,
+		}, function(response) {
+				$('#install_content').html(response);
+				selectIt();
 	});	
+	
 }
 
 getEnding = function(){
-	$.post('builder/ending.php', { check: 1 }, function(response) {
-		$('#install_content').html(response);
+	$.post('builder/ending.php', { 
+		check: 1,
+		}, function(response) {
+				$('#install_content').html(response);
 	});	
+	
 }
 
 callSaved = function(text, type){
-	var $popup = $('#ui_popup');
-	if($popup.length) {
-		$popup.find('.msg').text(text);
-		$popup.addClass('show');
-		setTimeout(function(){ $popup.removeClass('show'); }, 3000);
+	if(type == 1){
+		$('.saved_data').removeClass('saved_warn saved_error').addClass('saved_ok');
 	}
+	if(type == 2){
+		$('.saved_data').removeClass('saved_ok saved_error').addClass('saved_warn');
+	}
+	if(type == 3){
+		$('.saved_data').removeClass('saved_warn saved_ok').addClass('saved_error');
+	}
+	$('.saved_span').text(text);
+	$('.saved_data').fadeIn(300).delay(3000).fadeOut();
 }
 
 selectIt = function(){
