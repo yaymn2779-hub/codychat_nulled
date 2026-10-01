@@ -25,13 +25,21 @@ require(__DIR__ . '/../system/config_version.php');
     </div>
 
     <script>
-        // جلب عناصر التثبيت وحقول البيانات مباشرة من السيرفر
         $(document).ready(function(){
-            $.post('builder/element_2.php', { check: 1 }, function(response) {
-                $('#install_content').html(response);
-            }).fail(function() {
-                $.post('builder/element.php', { check: 1 }, function(response) {
-                    $('#install_content').html(response);
+            // أولاً نتحقق من الأذونات ثم نجلب نموذج البيانات تلقائياً
+            $.post('builder/permission.php', { check: 1 }, function(permResponse) {
+                // استدعاء جلب عناصر التثبيت
+                $.post('builder/element.php', { check: 1 }, function(elemResponse) {
+                    $('#install_content').html(elemResponse);
+                }).fail(function(xhr) {
+                    $('#install_content').html('<p style="color:red; text-align:center; padding:20px;">حدث خطأ أثناء تحميل عناصر التثبيت (Status: ' + xhr.status + ')</p>');
+                });
+            }).fail(function(xhr) {
+                // في حال كان المسار يستدعي المجلد مباشرة بدون builder/
+                $.post('element.php', { check: 1 }, function(elemResponse) {
+                    $('#install_content').html(elemResponse);
+                }).fail(function(err) {
+                    $('#install_content').html('<p style="color:red; text-align:center; padding:20px;">تعذر الاتصال بالسيرفر للجلب (Status: ' + err.status + ')</p>');
                 });
             });
         });
